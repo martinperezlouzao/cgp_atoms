@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 	<head>
@@ -29,44 +30,37 @@
 	
 
 		<script>
-			var atomstodraw = [];
-			var camera, controls, scene, renderer;
+			var atomNames = [];
+			var atomsToDraw = [];
+			var groups = [];
+			var params;
+			var activeSelection = 0;
+			var atomType = function(name, coordinates, geometry, material){
+					this.name = name;
+					this.coordinates = coordinates;
+					this.geometry = geometry;
+					this.material = material;
+				return this;
+			};
+			var camera, controls, scene, renderer,cubeCamera;
 			var ambientLight, light, r = 0.0;
 			THREE.Cache.enabled = true;
-
 			var file = new THREE.FileLoader();
 			var lines;
-
+			
 			file.load(
 				// resource URL
 				'points.xyz',
-
 				// onLoad callback
 				function ( data ) {
-					a=3;
 					// output the text to the console
 					lines = data.split('\n');
 					var line;
 					var coordinates = [];
-					/*for (var i = 0; i < lines.length; i++){
-						line = lines[i].split(' ');
-						if(line.length > 1){
-							for(var j=0;j<line.length;j++){
-								var point = parseFloat(line[j]);
-								if (! isNaN(point)){
-									coordinates.push(point);
-								}
-							}
-						}
-						if(coordinates.length === 3){
-							atomstodraw.push(coordinates);
-						}
-						console.log(coordinates);
-						coordinates = [];
-					}*/
-
+					
 					for (var i = 0; i < lines.length; i++){
 						line = lines[i].split(' ');
+						
 						if(line.length > 1){
 							for(var j=0;j<line.length;j++){
 								if(line[j] != ''){
@@ -74,173 +68,148 @@
 									if (! isNaN(point)){
 										coordinates.push(point);
 									}
-
 									else{
 										coordinates.push(line[j]);
+										if(!atomNames.includes(line[j])){
+											atomNames.push(line[j]);
+										}
 									}
 								}
 							}
 						}
-						if(coordinates.length === 4){
-							atomstodraw.push(coordinates);
+
+						if(coordinates.length == 4){
+							atomsToDraw.push(coordinates);
 						}
+						
 						coordinates = [];
+					}
+
+					for(var i=0, j=0;i<atomNames.length;i++){
+						var coordinates = [];
+						var newAtom = new atomType(atomNames[i],
+													coordinates,
+													new THREE.SphereGeometry( 0.4, 32, 32 ),
+													new THREE.MeshStandardMaterial( {color: 0xff0000} )
+													  );
+						newAtom.material.color.setHex( Math.random() * 0xffffff );
+						for(;j<atomsToDraw.length;j++){
+							if(atomsToDraw[j][0] == atomNames[i]){
+								newAtom.coordinates.push(atomsToDraw[j]);
+							}
+
+							else{
+								break;
+							}
+						}
+						
+						groups.push(newAtom);
 					}
 					
 					init();
-					buildGui();
-					animate();
 				},				
-
 				// onProgress callback
 				function ( xhr ) {
 					console.log( (xhr.loaded / xhr.total * 100) + '% loaded' );
 				},
-
 				// onError callback
 				function ( err ) {
 					console.error( 'An error happened loading the file' );
 				}
 			);
-
 			
 			var scene;
 			var spotLight;
-			var gui;
-
-
-			function init(){	
-				console.log(atomstodraw);
+			
+			function init(){		
+				if(groups.length == 0){
+					console.log("Error: no atoms loaded");
+					return;
+				}			
 				var SCREEN_WIDTH = window.innerWidth;
 				var SCREEN_HEIGHT = window.innerHeight;
 				
 				var container = document.createElement( 'div' );
 				document.body.appendChild( container );
-
 				renderer = new THREE.WebGLRenderer();
 				renderer.setPixelRatio( window.devicePixelRatio );
 				renderer.setSize( window.innerWidth, window.innerHeight );
 				container.appendChild( renderer.domElement );
-
-
 					
 				scene = new THREE.Scene();
-
 				var aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
 					
-				camera = new THREE.PerspectiveCamera(
-					35,			// Field of view
-					aspect,		// Aspect ratio
-					10,			// Near plane
-					10000			// Far plane
-				);
+				camera = new THREE.PerspectiveCamera( 45, aspect, 2, 10000 );
 				camera.position.set( 10, 10, 30 );
 				camera.lookAt( scene.position );
 
+				cubeCamera = new THREE.CubeCamera( 1, 10000, 128 );
+
 				controls = new THREE.OrbitControls( camera, renderer.domElement );
-				controls.enableZoom = false;
+				controls.enableZoom = true;
 				controls.enableDamping = true;
-
 				controls.update();						
-
-				ambientLight = new THREE.AmbientLight(0x660000);
+				ambientLight = new THREE.AmbientLight(0x000000);
 				scene.add(ambientLight);
-
-				spotLight = new THREE.SpotLight( 0xffffff, 1 );
-				spotLight.position.set( 15, 40, 35 );
-				spotLight.angle = Math.PI / 4;
-				spotLight.penumbra = 0.05;
-				spotLight.decay = 2;
-				spotLight.distance = 200;
-				scene.add( spotLight );
-
 				
-				var mesh = new THREE.Mesh(
-					new THREE.SphereGeometry( 0.4, 16, 8 ),
-					new THREE.MeshStandardMaterial( { color: 0xffff00 } )
-				);
+				var light = new THREE.DirectionalLight( 0xffffff, 0.8 );
+				light.position.set(1,1,1);
+				scene.add( light );
 
-				var duplicate = new THREE.Mesh(mesh.geometry, mesh.material);
-				duplicate.position.set(0,0,0);
-				scene.add(duplicate);
-
-
-				var mesh2 = new THREE.Mesh(
-					new THREE.SphereGeometry( 0.5, 16, 8 ),
-					new THREE.MeshStandardMaterial( { color: 0x00ff00 } )
-				);		
-
-				mesh2.position.set(atomstodraw[0][1],atomstodraw[0][2],atomstodraw[0][3]);
-				scene.add(mesh2);
-
-				for(var i=1;i<atomstodraw.length;i++){
-					if(atomstodraw[i][0] == "C"){
-						mesh.material.color.setHex(0xff0000);
-					} 
-					//if(atomstodraw[i][0] == "Bi"){
-					else{
-						mesh.material.color.setHex(0xff00ff);
-					} 
-					var duplicate = new THREE.Mesh(mesh.geometry, mesh.material);
-					duplicate.position.set(atomstodraw[i][1],atomstodraw[i][2],atomstodraw[i][3]);
-					scene.add(duplicate);
+				for(var i=0;i<groups.length;i++){
+					for(var j=0;j<groups[i].coordinates.length;j++){
+						var mesh = new THREE.Mesh(groups[i].geometry, groups[i].material);
+						mesh.position.set(groups[i].coordinates[j][1], groups[i].coordinates[j][2], groups[i].coordinates[j][3]);
+						scene.add(mesh);
+					}
 				}
+
+				var gui = new dat.GUI();
+
+
+				params = {
+					'Element': groups[activeSelection].name,
+					'Color': groups[activeSelection].material.color.getHex(),
+					'Roughness': groups[activeSelection].material.roughness,
+					'Metalness': groups[activeSelection].material.metalness,
+				};
+
+				gui.add( params, "Element", atomNames).onChange( function ( value ) {
+					activeSelection = atomNames.indexOf(value);
+				} ).listen();
+				
+				gui.addColor( params, 'Color' ).onChange( function ( val ) {
+					groups[activeSelection].material.color.setHex( val );
+				} ).listen();
+				
+				gui.add( params, "Metalness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+					groups[activeSelection].material.metalness = value;
+					console.log(gui);
+				} );
+				gui.add( params, "Roughness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+					groups[activeSelection].material.roughness = value;
+				} );
+				
+
+				gui.open();
+
 					
 				renderer.setClearColor( 0x000000, 1);
 				renderer.render( scene, camera );
+				animate();
 			}
-
 			function animate(){
 				requestAnimationFrame( animate );
 				
-				spotLight.position.x = 20 * Math.cos( r );
-				spotLight.position.z = 20 * Math.sin( r );
-				r += 0.01;
-
+				/*light.position.x = 20 * Math.cos( r );
+				light.position.z = 20 * Math.sin( r );
+				r += 0.01; */
 				controls.update();
+				cubeCamera.update( renderer, scene );
 				renderer.render( scene, camera );
 			}
-
-			function buildGui() {
-				gui = new dat.GUI();
-				var params = {
-					'light color': spotLight.color.getHex(),
-					intensity: spotLight.intensity,
-					distance: spotLight.distance,
-					angle: spotLight.angle,
-					penumbra: spotLight.penumbra,
-					decay: spotLight.decay
-				};
-				gui.addColor( params, 'light color' ).onChange( function ( val ) {
-					spotLight.color.setHex( val );
-					//animate();
-				} );
-				gui.add( params, 'intensity', 0, 2 ).onChange( function ( val ) {
-					spotLight.intensity = val;
-					//animate();
-				} );
-				gui.add( params, 'distance', 50, 200 ).onChange( function ( val ) {
-					spotLight.distance = val;
-					//animate();
-				} );
-				gui.add( params, 'angle', 0, Math.PI / 3 ).onChange( function ( val ) {
-					spotLight.angle = val;
-					//animate();
-				} );
-				gui.add( params, 'penumbra', 0, 1 ).onChange( function ( val ) {
-					spotLight.penumbra = val;
-					//animate();
-				} );
-				gui.add( params, 'decay', 1, 2 ).onChange( function ( val ) {
-					spotLight.decay = val;
-					//animate();
-				} );
-				gui.open();
-			}
-
 			
-
-
+			
 		</script>
 
 	</body>
