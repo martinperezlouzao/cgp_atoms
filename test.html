@@ -27,7 +27,6 @@
 		<script src="..\three.js-master\three.js-master\examples\js\WebGL.js"></script>
 		<script src="..\three.js-master\three.js-master\examples\js\libs\stats.min.js"></script>
 		<script src='..\three.js-master\three.js-master\examples\js\libs\dat.gui.min.js'></script>
-	
 
 		<script>
 			var atomNames = [];
@@ -42,12 +41,17 @@
 					this.material = material;
 				return this;
 			};
-			var camera, controls, scene, renderer,cubeCamera;
+			var camera, controls, scene, renderer;
 			var ambientLight, light, r = 0.0;
 			THREE.Cache.enabled = true;
 			var file = new THREE.FileLoader();
 			var lines;
-			
+
+			//----------------------
+			var turn = 0, cubeCamera1, cubeCamera2;
+			//---------------------------------
+
+
 			file.load(
 				// resource URL
 				'points.xyz',
@@ -85,27 +89,6 @@
 						coordinates = [];
 					}
 
-					for(var i=0, j=0;i<atomNames.length;i++){
-						var coordinates = [];
-						var newAtom = new atomType(atomNames[i],
-													coordinates,
-													new THREE.SphereGeometry( 0.4, 32, 32 ),
-													new THREE.MeshStandardMaterial( {color: 0xff0000} )
-													  );
-						newAtom.material.color.setHex( Math.random() * 0xffffff );
-						for(;j<atomsToDraw.length;j++){
-							if(atomsToDraw[j][0] == atomNames[i]){
-								newAtom.coordinates.push(atomsToDraw[j]);
-							}
-
-							else{
-								break;
-							}
-						}
-						
-						groups.push(newAtom);
-					}
-					
 					init();
 				},				
 				// onProgress callback
@@ -118,14 +101,9 @@
 				}
 			);
 			
-			var scene;
-			var spotLight;
+
 			
-			function init(){		
-				if(groups.length == 0){
-					console.log("Error: no atoms loaded");
-					return;
-				}			
+			function init(){				
 				var SCREEN_WIDTH = window.innerWidth;
 				var SCREEN_HEIGHT = window.innerHeight;
 				
@@ -143,7 +121,6 @@
 				camera.position.set( 10, 10, 30 );
 				camera.lookAt( scene.position );
 
-				cubeCamera = new THREE.CubeCamera( 1, 10000, 128 );
 
 				controls = new THREE.OrbitControls( camera, renderer.domElement );
 				controls.enableZoom = true;
@@ -152,9 +129,49 @@
 				ambientLight = new THREE.AmbientLight(0x000000);
 				scene.add(ambientLight);
 				
-				var light = new THREE.DirectionalLight( 0xffffff, 0.8 );
-				light.position.set(1,1,1);
+				var light = new THREE.DirectionalLight( 0xffffff , 1);
+				light.position.set(10,10,30);
 				scene.add( light );
+
+				var light2 = new THREE.DirectionalLight( 0xffffff , 1);
+				light2.position.set(-10,-10,-30);
+				scene.add( light2 );
+
+				//------------------------------
+				cubeCamera1 = new THREE.CubeCamera( 2, 10000, 512 );
+				scene.add( cubeCamera1 );
+				cubeCamera2 = new THREE.CubeCamera( 2, 10000, 512 );
+				scene.add( cubeCamera2 );
+				//------------------------------
+
+				for(var i=0, j=0;i<atomNames.length;i++){
+					var coordinates = [];
+					var newAtom = new atomType(atomNames[i],
+												coordinates,
+												new THREE.SphereGeometry( 0.6, 32, 32 ),
+												new THREE.MeshStandardMaterial( {color: 0xff0000,
+															metalness: 0.5,
+															roughness: 0,
+															envMap: cubeCamera2.renderTarget.texture} )
+													);
+					newAtom.material.color.setHex( Math.random() * 0xffffff );
+					for(;j<atomsToDraw.length;j++){
+						if(atomsToDraw[j][0] == atomNames[i]){
+							newAtom.coordinates.push(atomsToDraw[j]);
+						}
+
+						else{
+							break;
+						}
+					}
+					
+					groups.push(newAtom);
+				}
+
+				if(groups.length == 0){
+					console.log("Error: no atoms loaded");
+					return;
+				}	
 
 				for(var i=0;i<groups.length;i++){
 					for(var j=0;j<groups[i].coordinates.length;j++){
@@ -201,11 +218,24 @@
 			function animate(){
 				requestAnimationFrame( animate );
 				
-				/*light.position.x = 20 * Math.cos( r );
-				light.position.z = 20 * Math.sin( r );
-				r += 0.01; */
+				if ( turn == 0 ) {
+					for( var i=0;i<groups.length;i++ ) {
+						groups[i].material.envMap = cubeCamera1.renderTarget.texture;
+					} 
+					cubeCamera2.update( renderer, scene );
+					turn = 1;
+				} 
+				
+				else {
+					for(var i=0;i<groups.length;i++){
+						groups[i].material.envMap = cubeCamera2.renderTarget.texture;
+					} 
+					cubeCamera1.update( renderer, scene );
+					turn = 0;
+				}
+
+
 				controls.update();
-				cubeCamera.update( renderer, scene );
 				renderer.render( scene, camera );
 			}
 			
