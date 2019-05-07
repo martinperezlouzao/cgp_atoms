@@ -1,3 +1,4 @@
+//----VARIABLES OF DATA-----
 var atomNames = [];
 var boneGroupNames = [];
 var atomsToDraw = [];
@@ -6,9 +7,13 @@ var boneGroups = [];
 var pairDistances = [];
 var atomParameters;
 var boneParameters;
+var settingsParameters;
 var activeSelection;
 var activeBoneGroup = -1;
 var maxDistance = 0;
+//--------------------------
+
+var fileName;
 
 
 var atomType = function(name, coordinates, geometry, material){
@@ -37,98 +42,91 @@ var lines;
 //----------------------
 var turn = 0, cubeCamera1, cubeCamera2;
 //---------------------------------
-file.load(
-    // resource URL
-    'points.xyz',
-    // onLoad callback
-    function ( data ) {
-        // output the text to the console
-        lines = data.split('\n');
-        var line;
-        var coordinates = [];
-        
-        for (var i = 0; i < lines.length; i++){
-            line = lines[i].split(' ');
+
+var SCREEN_WIDTH = window.innerWidth;
+var SCREEN_HEIGHT = window.innerHeight;
+
+var container = document.createElement( 'div' );
+document.body.appendChild( container );
+renderer = new THREE.WebGLRenderer();
+renderer.setPixelRatio( window.devicePixelRatio );
+renderer.setSize( window.innerWidth, window.innerHeight );
+container.appendChild( renderer.domElement );    
+scene = new THREE.Scene();
+
+//--------------BEGIN OF PROGRAM------------------------
+
+loadFile();
+
+//-------------------------------------------------------
+
+function loadFile(){
+    fileName = prompt("Enter a name of the coordinates file", "points.xyz");
+    
+    if(fileName == ""){
+        window.alert("You have to enter a name, please refresh the browser and try again");
+        return;
+    }
+
+    file.load(
+        // resource URL
+        fileName,
+        // onLoad callback
+        function ( data ) {
+            // output the text to the console
+            lines = data.split('\n');
+            var line;
+            var coordinates = [];
             
-            if(line.length > 1){
-                for(var j=0;j<line.length;j++){
-                    if(line[j] != ''){
-                        var point = parseFloat(line[j]);
-                        if (! isNaN(point)){
-                            coordinates.push(point);
-                        }
-                        else{
-                            coordinates.push(line[j]);
-                            if(!atomNames.includes(line[j])){
-                                atomNames.push(line[j]);
+            for (var i = 0; i < lines.length; i++){
+                line = lines[i].split(' ');
+                
+                if(line.length > 1){
+                    for(var j=0;j<line.length;j++){
+                        if(line[j] != ''){
+                            var point = parseFloat(line[j]);
+                            if (! isNaN(point)){
+                                coordinates.push(point);
+                            }
+                            else{
+                                coordinates.push(line[j]);
+                                if(!atomNames.includes(line[j])){
+                                    atomNames.push(line[j]);
+                                }
                             }
                         }
                     }
                 }
+                if(coordinates.length == 4){
+                    var vector = new THREE.Vector3(coordinates[1],coordinates[2],coordinates[3]);
+                    var newAtom = [];
+                    newAtom.push(coordinates[0]);
+                    newAtom.push(vector);
+                    atomsToDraw.push(newAtom);
+                }
+                
+                coordinates = [];
             }
-            if(coordinates.length == 4){
-                var vector = new THREE.Vector3(coordinates[1],coordinates[2],coordinates[3]);
-                var newAtom = [];
-                newAtom.push(coordinates[0]);
-                newAtom.push(vector);
-                atomsToDraw.push(newAtom);
-            }
-            
-            coordinates = [];
+            fillArrays();
+            draw();
+        },				
+        // onProgress callback
+        function ( xhr ) {
+            console.log( (xhr.loaded / xhr.total * 100) + '% loaded' );
+        },
+        // onError callback
+        function ( err ) {
+            window.alert("Could not load the file " + fileName + ", please refresh the browser and try again");
         }
-        init();
-    },				
-    // onProgress callback
-    function ( xhr ) {
-        console.log( (xhr.loaded / xhr.total * 100) + '% loaded' );
-    },
-    // onError callback
-    function ( err ) {
-        console.error( 'An error happened loading the file' );
-    }
-);
+    );
+}
 
+function clearAll(){
 
+}
 
-function init(){				
-    var SCREEN_WIDTH = window.innerWidth;
-    var SCREEN_HEIGHT = window.innerHeight;
-    
-    var container = document.createElement( 'div' );
-    document.body.appendChild( container );
-    renderer = new THREE.WebGLRenderer();
-    renderer.setPixelRatio( window.devicePixelRatio );
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    container.appendChild( renderer.domElement );
-        
-    scene = new THREE.Scene();
-    var aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
-        
-    camera = new THREE.PerspectiveCamera( 45, aspect, 2, 10000 );
-    camera.position.set( 10, 10, 30 );
-    camera.lookAt( scene.position );
-    controls = new THREE.OrbitControls( camera, renderer.domElement );
-    controls.enableZoom = true;
-    controls.enableDamping = true;
-    controls.update();						
-    ambientLight = new THREE.AmbientLight(0xffffff,1);
-    scene.add(ambientLight);
-    
-    var light = new THREE.DirectionalLight( 0xffffff , 1);
-    light.position.set(10,10,30);
-    scene.add( light );
-    var light2 = new THREE.DirectionalLight( 0xffffff , 1);
-    light2.position.set(-10,-10,-30);
-    scene.add( light2 );
-    //------------------------------
-    /*cubeCamera1 = new THREE.CubeCamera( 2, 10000, 512 );
-    scene.add( cubeCamera1 );
-    cubeCamera2 = new THREE.CubeCamera( 2, 10000, 512 );
-    scene.add( cubeCamera2 );*/
-    //------------------------------
-
+function fillArrays(){
     var randomColor = Math.random() * 0xffffff;
-
     for(var i=0, j=0;i<atomsToDraw.length;i++){
         var newAtom = new atomType(	atomsToDraw[i][0],
                                     atomsToDraw[i][1],
@@ -168,6 +166,60 @@ function init(){
     }
     
     activeSelection = atomNames[0];
+
+    //-----------CREATE FIRST BONE GROUP--------------
+
+    boneGroups.push(new boneGroup("Group 1",
+                    0,
+                    0,
+                    new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
+                        metalness: 0.5,
+                        roughness: 0} ),
+                    0.1));
+
+    boneGroupNames.push("Group 1");
+    activeBoneGroup = 0;
+    for(var i=0;i<pairDistances.length;i++){
+        var row = [];
+        for(var j=0;j<pairDistances[i].length;j++){
+            row.push(null);
+        }
+        boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
+    }
+}
+
+
+
+function draw(){
+    var aspect = SCREEN_WIDTH / SCREEN_HEIGHT;
+        
+    camera = new THREE.PerspectiveCamera( 45, aspect, 2, 10000 );
+    camera.position.set( 10, 10, 30 );
+    camera.lookAt( scene.position );
+    controls = new THREE.OrbitControls( camera, renderer.domElement );
+    controls.enableZoom = true;
+    controls.enableDamping = true;
+    controls.update();						
+    ambientLight = new THREE.AmbientLight(0xffffff,1);
+    scene.add(ambientLight);
+    
+    var light = new THREE.DirectionalLight( 0xffffff , 1);
+    light.position.set(10,10,30);
+    scene.add( light );
+    var light2 = new THREE.DirectionalLight( 0xffffff , 1);
+    light2.position.set(-10,-10,-30);
+    scene.add( light2 );
+    //------------------------------
+    /*cubeCamera1 = new THREE.CubeCamera( 2, 10000, 512 );
+    scene.add( cubeCamera1 );
+    cubeCamera2 = new THREE.CubeCamera( 2, 10000, 512 );
+    scene.add( cubeCamera2 );*/
+    //------------------------------
+
+    
+
+
+    
 
     // function for finding atom object according to their names.
     function findAtom(groups){
@@ -211,23 +263,7 @@ function init(){
 
 
     //-----FIRST BONE GROUP INITIALIZATION---------
-    boneGroups.push(new boneGroup("Group 1",
-                    0,
-                    0,
-                    new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
-                        metalness: 0.5,
-                        roughness: 0} ),
-                    0.1));
-
-    boneGroupNames.push("Group 1");
-    activeBoneGroup = 0;
-    for(var i=0;i<pairDistances.length;i++){
-        var row = [];
-        for(var j=0;j<pairDistances[i].length;j++){
-            row.push(null);
-        }
-        boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
-    }
+    
 
 
     function redrawBones(){
@@ -445,11 +481,23 @@ function init(){
         guiBone.add ( boneParameters, "Delete group");  
     }  
 
+    function refreshSettingsGui(){
+        settingsParameters = {
+            "Save settings": function(){
+                
+            }
+        }
+
+        guiSettings.add(settingsParameters, "Save settings");
+    }
+
     var gui = new dat.GUI();
     var guiAtom = gui.addFolder('Atom properties');
     var guiBone = gui.addFolder('Bone properties');
+    var guiSettings = gui.addFolder('Manage settings');
     refreshAtomGui();
     refreshBoneGui();    
+    refreshSettingsGui();
     gui.open();
         
     renderer.setClearColor( 0x000000, 1);
