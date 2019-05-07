@@ -313,6 +313,9 @@ function init(){
 
     function refreshBoneGui(){
         if(guiBone.__controllers.length > 0){
+            guiBone.__controllers[10].remove();
+            guiBone.__controllers[9].remove();
+            guiBone.__controllers[8].remove();
             guiBone.__controllers[7].remove();
             guiBone.__controllers[6].remove();
             guiBone.__controllers[5].remove();
@@ -325,6 +328,19 @@ function init(){
 
         boneParameters = {
             'Group name': boneGroups[activeBoneGroup].name,
+            'Edit name' : boneGroupNames[activeBoneGroup],
+            'Save new name' : function(){
+                var newName = boneParameters["Edit name"];
+                for(var i=0;i<boneGroups.length;i++){
+                    if(boneGroups[i].name == newName){
+                        window.alert("The bone group name " + newName + " already exists, please select another");
+                        return;
+                    }
+                }
+                boneGroupNames[activeBoneGroup] = newName;
+                boneGroups[activeBoneGroup].name = newName;
+                refreshBoneGui();
+            },
             'Min distance': boneGroups[activeBoneGroup].minDistance,
             'Max distance' : boneGroups[activeBoneGroup].maxDistance,
             'Color' : boneGroups[activeBoneGroup].material.color.getHex(),
@@ -363,6 +379,30 @@ function init(){
                     boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
                 }
                 refreshBoneGui();
+            },
+            'Delete group': function(){
+                if(boneGroups.length == 1){
+                    window.alert("You cannot delete the last bone group");
+                    return;
+                }
+
+                var answer = confirm("Are you sure you want to delete the bone group " + boneGroupNames[activeBoneGroup] + "?");
+                if (answer == true) {
+                    for(var j=0;j<boneGroups[activeBoneGroup].bonesAlreadyDrawn.length;j++){
+                        for(var k=0;k<boneGroups[activeBoneGroup].bonesAlreadyDrawn[j].length;k++){            
+                            if(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] != null){    //clean objects
+                                scene.remove(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k]);
+                                boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k].geometry.dispose();
+                                boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k].material.dispose();
+                                boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] = null;   
+                            }
+                        }
+                    }
+                    boneGroupNames.splice(activeBoneGroup,1);
+                    boneGroups.splice(activeBoneGroup,1);
+                    activeBoneGroup = 0;
+                    refreshBoneGui();
+                }
             }
         };
         
@@ -371,6 +411,10 @@ function init(){
             activeBoneGroup = boneGroupNames.indexOf(value);
             refreshBoneGui();
         });
+
+        guiBone.add( boneParameters, "Edit name");
+
+        guiBone.add ( boneParameters, "Save new name");  
 
         guiBone.add(boneParameters, 'Min distance').step(0.005).min(0).max(maxDistance).onChange( function(value){
             boneGroups[activeBoneGroup].minDistance = value;
@@ -398,6 +442,7 @@ function init(){
         } );
 
         guiBone.add ( boneParameters, "Create group");  
+        guiBone.add ( boneParameters, "Delete group");  
     }  
 
     var gui = new dat.GUI();
