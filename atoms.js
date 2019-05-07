@@ -5,11 +5,15 @@ var atomsToDraw = [];
 var groups = [];
 var boneGroups = [];
 var pairDistances = [];
+
 var atomParameters;
 var boneParameters;
 var settingsParameters;
+
 var activeSelection;
 var activeBoneGroup = -1;
+var allowedx = 0, allowedy = 0;
+
 var maxDistance = 0;
 //--------------------------
 
@@ -31,6 +35,7 @@ var boneGroup = function(name, minDistance, maxDistance, material, thickness){
         this.material = material;
         this.thickness = thickness;
         this.bonesAlreadyDrawn = [];
+        this.allowedElements = [];
     return this;
 }
 
@@ -186,6 +191,14 @@ function fillArrays(){
         }
         boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
     }
+
+    for(var i=0;i<atomNames.length;i++){
+        var row = [];
+        for(j = j=atomNames.length-i;j>0;j--){
+            row.push(true);
+        }
+        boneGroups[activeBoneGroup].allowedElements.push(row);
+    }
 }
 
 
@@ -259,15 +272,10 @@ function draw(){
         var mesh = new THREE.Mesh(bone,material);
         mesh.position.set(position.x, position.y, position.z);
         return mesh;
-    }
-
-
-    //-----FIRST BONE GROUP INITIALIZATION---------
-    
+    }    
 
 
     function redrawBones(){
-
         for(var j=0;j<pairDistances.length;j++){
             for(var k=0;k<pairDistances[j].length;k++){
                 if(pairDistances[j][k] > boneGroups[activeBoneGroup].minDistance && pairDistances[j][k] <= boneGroups[activeBoneGroup].maxDistance){    //has to be a bone
@@ -308,10 +316,7 @@ function draw(){
 
 
     function refreshAtomGui(){
-        if(guiAtom.__controllers.length > 0){
-            guiAtom.__controllers[3].remove();
-            guiAtom.__controllers[2].remove();
-            guiAtom.__controllers[1].remove();
+        while(guiAtom.__controllers.length > 0){
             guiAtom.__controllers[0].remove();
         }
 
@@ -348,17 +353,7 @@ function draw(){
     //------GUI for bone groups---------------
 
     function refreshBoneGui(){
-        if(guiBone.__controllers.length > 0){
-            guiBone.__controllers[10].remove();
-            guiBone.__controllers[9].remove();
-            guiBone.__controllers[8].remove();
-            guiBone.__controllers[7].remove();
-            guiBone.__controllers[6].remove();
-            guiBone.__controllers[5].remove();
-            guiBone.__controllers[4].remove();
-            guiBone.__controllers[3].remove();
-            guiBone.__controllers[2].remove();
-            guiBone.__controllers[1].remove();
+        while(guiBone.__controllers.length > 0){
             guiBone.__controllers[0].remove();
         }
 
@@ -379,6 +374,9 @@ function draw(){
             },
             'Min distance': boneGroups[activeBoneGroup].minDistance,
             'Max distance' : boneGroups[activeBoneGroup].maxDistance,
+            'Bone from' : atomNames[allowedx],
+            'Bone to' : atomNames.slice(allowedx)[allowedy],
+            'Allowed' : boneGroups[activeBoneGroup].allowedElements[allowedx][allowedy],
             'Color' : boneGroups[activeBoneGroup].material.color.getHex(),
             'Thickness' : boneGroups[activeBoneGroup].thickness,
             'Roughness': boneGroups[activeBoneGroup].material.roughness,
@@ -413,6 +411,10 @@ function draw(){
                         row.push(null);
                     }
                     boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
+                }
+
+                for(var i=0;i<atomNames.length;i++){
+                    boneGroups[activeBoneGroup].allowedElements.push(atomNames[i]);
                 }
                 refreshBoneGui();
             },
@@ -459,6 +461,22 @@ function draw(){
         guiBone.add(boneParameters, 'Max distance').step(0.005).min(0).max(maxDistance).onChange( function(value){
             boneGroups[activeBoneGroup].maxDistance = value;
             redrawBones();
+        });
+
+        guiBone.add( boneParameters, "Bone from", atomNames).listen().onChange(function(value){
+            allowedx = atomNames.indexOf(value);
+            allowedy = 0;
+            refreshBoneGui();
+        });
+
+        guiBone.add( boneParameters, "Bone to", atomNames.slice(allowedx)).listen().onChange(function(value){
+            allowedy = atomNames.slice(allowedx).indexOf(value);
+            refreshBoneGui();
+        });
+
+        guiBone.add( boneParameters, "Allowed").listen().onChange(function(value){
+            boneGroups[activeBoneGroup].allowedElements[allowedx][allowedy] = value;            
+            refreshBoneGui();
         });
 
         guiBone.addColor( boneParameters, 'Color' ).onChange( function ( value ) {
