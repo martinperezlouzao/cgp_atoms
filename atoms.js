@@ -315,30 +315,37 @@ function init(){
 
             for(var i=0;i<boneGroups.length;i++){
                 if(boneGroups[i].name == name){
-                    window.alert("The bone group name " + name + " already exists");
+                    window.alert("The bone group name " + name + " already exists, please select another");
                     return;
                 }
             }
             boneGroups.push(new boneGroup(name,
-                                    0,
-                                    0,
-                                    new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
-                                        metalness: 0.5,
-                                        roughness: 0} ),
-                                    ));
+                            0,
+                            0,
+                            new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
+                                metalness: 0.5,
+                                roughness: 0} ),
+                            ));
 
             boneGroupNames.push(name);
             activeBoneGroup = boneGroups.length-1;
+            for(var i=0;i<pairDistances.length;i++){
+                var row = [];
+                for(var j=0;j<pairDistances[i].length;j++){
+                    row.push(null);
+                }
+                boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
+            }
         }
     };
 
     guiBone.add( boneParameters, "Group name", boneGroupNames).listen();
 
-    guiBone.add(boneParameters, 'Min distance').step(0.25).min(0).max(maxDistance).onChange( function(value){
+    guiBone.add(boneParameters, 'Min distance').step(0.05).min(0).max(maxDistance).onChange( function(value){
         boneGroups[activeBoneGroup].minDistance = value;
         redrawBones();
     });
-    guiBone.add(boneParameters, 'Max distance').step(0.25).min(0).max(maxDistance).onChange( function(value){
+    guiBone.add(boneParameters, 'Max distance').step(0.05).min(0).max(maxDistance).onChange( function(value){
         boneGroups[activeBoneGroup].maxDistance = value;
         redrawBones();
     });
