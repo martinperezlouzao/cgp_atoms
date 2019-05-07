@@ -4,7 +4,7 @@ var atomsToDraw = [];
 var groups = [];
 var boneGroups = [];
 var pairDistances = [];
-var params;
+var atomParameters;
 var boneParameters;
 var activeSelection;
 var activeBoneGroup = -1;
@@ -19,11 +19,12 @@ var atomType = function(name, coordinates, geometry, material){
     return this;
 };
 
-var boneGroup = function(name, minDistance, maxDistance, material){
+var boneGroup = function(name, minDistance, maxDistance, material, thickness){
         this.name = name;
         this.minDistance = minDistance;
         this.maxDistance = maxDistance;
         this.material = material;
+        this.thickness = thickness;
         this.bonesAlreadyDrawn = [];
     return this;
 }
@@ -110,7 +111,7 @@ function init(){
     controls.enableZoom = true;
     controls.enableDamping = true;
     controls.update();						
-    ambientLight = new THREE.AmbientLight(0xffffff);
+    ambientLight = new THREE.AmbientLight(0xffffff,1);
     scene.add(ambientLight);
     
     var light = new THREE.DirectionalLight( 0xffffff , 1);
@@ -131,7 +132,7 @@ function init(){
     for(var i=0, j=0;i<atomsToDraw.length;i++){
         var newAtom = new atomType(	atomsToDraw[i][0],
                                     atomsToDraw[i][1],
-                                    new THREE.SphereGeometry( 0.6, 32, 32 ),
+                                    new THREE.SphereBufferGeometry( 0.6, 32, 32 ),
                                     new THREE.MeshStandardMaterial( {color: randomColor,
                                                 metalness: 0.5,
                                                 roughness: 0,
@@ -183,25 +184,18 @@ function init(){
     for(var i=0;i<groups.length;i++){
         var mesh = new THREE.Mesh(groups[i].geometry, groups[i].material);
             mesh.position.set(groups[i].coordinates.x, groups[i].coordinates.y, groups[i].coordinates.z);
+            //mesh.
             scene.add(mesh);
     }
 
 
     //---------------------CREATION OF BONES---------------------------
 
-    function createBone(v1, v2, material){
+    function createBone(v1, v2, material, thickness){
         var length = v1.distanceTo(v2);
         var position  = v2.clone().add(v1).divideScalar(2);
 
-        var bone = new THREE.CylinderBufferGeometry(0.1,0.1,length,10,10,false);
-
-        /*bone.verticesNeedUpdate = true;
-        bone.elementsNeedUpdate = true;
-        bone.morphTargetsNeedUpdate = true;
-        bone.uvsNeedUpdate = true;
-        bone.normalsNeedUpdate = true;
-        bone.colorsNeedUpdate = true;
-        bone.tangentsNeedUpdate = true;*/
+        var bone = new THREE.CylinderBufferGeometry(thickness,thickness,length,10,10,false);
     
         var orientation = new THREE.Matrix4();
         var rotation = new THREE.Matrix4();
@@ -223,7 +217,7 @@ function init(){
                     new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
                         metalness: 0.5,
                         roughness: 0} ),
-                    0.2));
+                    0.1));
 
     boneGroupNames.push("Group 1");
     activeBoneGroup = 0;
@@ -258,122 +252,159 @@ function init(){
                 }
             }
         }
+    }
 
+    function redrawCylinders(){
+        for(var j=0;j<pairDistances.length;j++){
+            for(var k=0;k<pairDistances[j].length;k++){
+                if(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] != null){
+                    scene.remove(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k]);
+                    boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k].geometry.dispose();
+                    boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] = createBone(groups[j].coordinates,groups[k+j+1].coordinates,boneGroups[activeBoneGroup].material,boneGroups[activeBoneGroup].thickness);    //the bone is drawn
+                    scene.add(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k]);
+                }
+            }
+        }
     }
 
     
-    //---------------------CREATION OF BONES---------------------------
+    //---------------------CREATION OF GUI---------------------------
 
+
+    function refreshAtomGui(){
+        if(guiAtom.__controllers.length > 0){
+            guiAtom.__controllers[3].remove();
+            guiAtom.__controllers[2].remove();
+            guiAtom.__controllers[1].remove();
+            guiAtom.__controllers[0].remove();
+        }
+
+        atomParameters = {
+            'Element': findAtom(groups)[0].name,
+            'Color': findAtom(groups)[0].material.color.getHex(),
+            'Roughness': findAtom(groups)[0].material.roughness,
+            'Metalness': findAtom(groups)[0].material.metalness,
+        };
+        guiAtom.add( atomParameters, "Element", atomNames).onChange( function ( value ) {
+            activeSelection = atomNames[atomNames.indexOf(value)];
+            refreshAtomGui();
+        } ).listen();
+        
+        guiAtom.addColor( atomParameters, 'Color' ).onChange( function ( value ) {
+            findAtom(groups).forEach(obj => {
+                obj.material.color.setHex(value);
+            })
+        } ).listen();
+        
+        guiAtom.add( atomParameters, "Metalness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+            findAtom(groups).forEach(obj => {
+                obj.material.metalness = value;
+            })
+        } );
+        guiAtom.add( atomParameters, "Roughness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+            findAtom(groups).forEach(obj => {
+                obj.material.roughness = value;
+            })
+        } );
+    }
+
+
+    //------GUI for bone groups---------------
+
+    function refreshBoneGui(){
+        if(guiBone.__controllers.length > 0){
+            guiBone.__controllers[7].remove();
+            guiBone.__controllers[6].remove();
+            guiBone.__controllers[5].remove();
+            guiBone.__controllers[4].remove();
+            guiBone.__controllers[3].remove();
+            guiBone.__controllers[2].remove();
+            guiBone.__controllers[1].remove();
+            guiBone.__controllers[0].remove();
+        }
+
+        boneParameters = {
+            'Group name': boneGroups[activeBoneGroup].name,
+            'Min distance': boneGroups[activeBoneGroup].minDistance,
+            'Max distance' : boneGroups[activeBoneGroup].maxDistance,
+            'Color' : boneGroups[activeBoneGroup].material.color.getHex(),
+            'Thickness' : boneGroups[activeBoneGroup].thickness,
+            'Roughness': boneGroups[activeBoneGroup].material.roughness,
+            'Metalness': boneGroups[activeBoneGroup].material.metalness,
+            'Create group': function(){
+                var name = prompt("Enter a name for the bone group", "");
     
-    var gui = new dat.GUI();
-    var atomProperties = gui.addFolder('Atom properties');
-
-    params = {
-        'Element': findAtom(groups)[0].name,
-        'Color': findAtom(groups)[0].material.color.getHex(),
-        'Roughness': findAtom(groups)[0].material.roughness,
-        'Metalness': findAtom(groups)[0].material.metalness,
-    };
-    atomProperties.add( params, "Element", atomNames).onChange( function ( value ) {
-        activeSelection = atomNames[atomNames.indexOf(value)];
-    } ).listen();
-    
-    atomProperties.addColor( params, 'Color' ).onChange( function ( value ) {
-        findAtom(groups).forEach(obj => {
-            obj.material.color.setHex(value);
-        })
-    } ).listen();
-    
-    atomProperties.add( params, "Metalness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
-        findAtom(groups).forEach(obj => {
-            obj.material.metalness = value;
-        })
-    } );
-    atomProperties.add( params, "Roughness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
-        findAtom(groups).forEach(obj => {
-            obj.material.roughness = value;
-        })
-    } );
-
-    var guiBone = gui.addFolder('Bone properties');
-
-    boneParameters = {
-        'Group name': boneGroups[activeBoneGroup].name,
-        'Min distance': boneGroups[activeBoneGroup].minDistance,
-        'Max distance' : boneGroups[activeBoneGroup].maxDistance,
-        'Color' : boneGroups[activeBoneGroup].material.color.getHex(),
-        'Thickness' : 0.1,
-        'Roughness': boneGroups[activeBoneGroup].material.roughness,
-        'Metalness': boneGroups[activeBoneGroup].material.metalness,
-        'Create group': function(){
-            var name = prompt("Enter a name for the bone group", "");
-
-            if(name == ""){
-                window.alert("You have to enter a name");
-                return;
-            }
-
-            for(var i=0;i<boneGroups.length;i++){
-                if(boneGroups[i].name == name){
-                    window.alert("The bone group name " + name + " already exists, please select another");
+                if(name == ""){
+                    window.alert("You have to enter a name");
                     return;
                 }
-            }
-            boneGroups.push(new boneGroup(name,
-                            0,
-                            0,
-                            new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
-                                metalness: 0.5,
-                                roughness: 0} ),
-                            ));
-
-            boneGroupNames.push(name);
-            activeBoneGroup = boneGroups.length-1;
-            for(var i=0;i<pairDistances.length;i++){
-                var row = [];
-                for(var j=0;j<pairDistances[i].length;j++){
-                    row.push(null);
-                }
-                boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
-            }
-        }
-    };
-
-    guiBone.add( boneParameters, "Group name", boneGroupNames).listen();
-
-    guiBone.add(boneParameters, 'Min distance').step(0.05).min(0).max(maxDistance).onChange( function(value){
-        boneGroups[activeBoneGroup].minDistance = value;
-        redrawBones();
-    });
-    guiBone.add(boneParameters, 'Max distance').step(0.05).min(0).max(maxDistance).onChange( function(value){
-        boneGroups[activeBoneGroup].maxDistance = value;
-        redrawBones();
-    });
-
-    guiBone.addColor( boneParameters, 'Color' ).onChange( function ( value ) {
-        boneGroups[activeBoneGroup].material.color.setHex(value);
-    } ).listen();
-
-    guiBone.add(boneParameters, 'Thickness'). min(0.1).max(0.5).onChange( function(value){
-        for(var i=0;i<boneGroups[activeBoneGroup].bonesAlreadyDrawn.length;i++){
-            for(var j=0;j<boneGroups[activeBoneGroup].bonesAlreadyDrawn[i].length;j++){
-                if(boneGroups[activeBoneGroup].bonesAlreadyDrawn[i][j] != null){
-                    boneGroups[activeBoneGroup].bonesAlreadyDrawn[i][j].geometry.parameters.radiusTop = value;
-                    boneGroups[activeBoneGroup].bonesAlreadyDrawn[i][j].geometry.parameters.radiusBottom = value;
-                }
-            }
-        }
-    });
-
-    guiBone.add( boneParameters, "Metalness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
-        boneGroups[activeBoneGroup].material.metalness = value;
-    } );
-    guiBone.add( boneParameters, "Roughness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
-        boneGroups[activeBoneGroup].material.roughness = value;
-    } );
-
-    guiBone.add ( boneParameters, "Create group");  //not working yet
     
+                for(var i=0;i<boneGroups.length;i++){
+                    if(boneGroups[i].name == name){
+                        window.alert("The bone group name " + name + " already exists, please select another");
+                        return;
+                    }
+                }
+                boneGroups.push(new boneGroup(name,
+                                0,
+                                0,
+                                new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
+                                    metalness: 0.5,
+                                    roughness: 0} ),
+                                0.1));
+    
+                boneGroupNames.push(name);
+                activeBoneGroup = boneGroups.length-1;
+                for(var i=0;i<pairDistances.length;i++){
+                    var row = [];
+                    for(var j=0;j<pairDistances[i].length;j++){
+                        row.push(null);
+                    }
+                    boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
+                }
+                refreshBoneGui();
+            }
+        };
+        
+
+        guiBone.add( boneParameters, "Group name", boneGroupNames).listen().onChange(function(value){
+            activeBoneGroup = boneGroupNames.indexOf(value);
+            refreshBoneGui();
+        });
+
+        guiBone.add(boneParameters, 'Min distance').step(0.005).min(0).max(maxDistance).onChange( function(value){
+            boneGroups[activeBoneGroup].minDistance = value;
+            redrawBones();
+        });
+        guiBone.add(boneParameters, 'Max distance').step(0.005).min(0).max(maxDistance).onChange( function(value){
+            boneGroups[activeBoneGroup].maxDistance = value;
+            redrawBones();
+        });
+
+        guiBone.addColor( boneParameters, 'Color' ).onChange( function ( value ) {
+            boneGroups[activeBoneGroup].material.color.setHex(value);
+        } ).listen();
+
+        guiBone.add(boneParameters, 'Thickness').step(0.01).min(0.1).max(0.7).onChange( function(value){
+            boneGroups[activeBoneGroup].thickness = value;
+            redrawCylinders();
+        });
+
+        guiBone.add( boneParameters, "Metalness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+            boneGroups[activeBoneGroup].material.metalness = value;
+        } );
+        guiBone.add( boneParameters, "Roughness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+            boneGroups[activeBoneGroup].material.roughness = value;
+        } );
+
+        guiBone.add ( boneParameters, "Create group");  
+    }  
+
+    var gui = new dat.GUI();
+    var guiAtom = gui.addFolder('Atom properties');
+    var guiBone = gui.addFolder('Bone properties');
+    refreshAtomGui();
+    refreshBoneGui();    
     gui.open();
         
     renderer.setClearColor( 0x000000, 1);
