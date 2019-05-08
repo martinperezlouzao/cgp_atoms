@@ -35,12 +35,15 @@ var boneGroup = function(name, minDistance, maxDistance, material, thickness){
         this.material = material;
         this.thickness = thickness;
         this.bonesAlreadyDrawn = [];
+        this.atomNamesCopy = [];
         this.allowedElements = [];
     return this;
 }
 
 var camera, controls, scene, renderer;
 var ambientLight, light, r = 0.0;
+var lights = [];
+
 THREE.Cache.enabled = true;
 var file = new THREE.FileLoader();
 var lines;
@@ -194,11 +197,28 @@ function fillArrays(){
 
     for(var i=0;i<atomNames.length;i++){
         var row = [];
-        for(j = j=atomNames.length-i;j>0;j--){
+        for(j=i;j<atomNames.length;j++){
             row.push(true);
         }
         boneGroups[activeBoneGroup].allowedElements.push(row);
+        var row2 = [];
+        for(j=i;j<atomNames.length;j++){
+            row2.push(atomNames[j]);
+        }
+        boneGroups[activeBoneGroup].atomNamesCopy.push(row2);
     }
+}
+
+function createLights(position) {
+    var sphere = new THREE.SphereBufferGeometry( 0.3, 16, 8 );
+    var lightMaterial = new THREE.MeshBasicMaterial({color: 0xffffff });
+
+    light = new THREE.PointLight( 0xff0040, 4, 0, 2);
+    var lightMesh = new THREE.Mesh(sphere, lightMaterial);
+    lightMesh.position.set(position[0], position[1], position[2]);
+    lightMesh.add(light);
+    lights.push(lightMesh);
+    scene.add(lightMesh);
 }
 
 
@@ -215,6 +235,19 @@ function draw(){
     controls.update();						
     ambientLight = new THREE.AmbientLight(0xffffff,1);
     scene.add(ambientLight);
+
+    createLights([0,10,20]);
+    createLights([-5,-3,10]);
+    createLights([2,5,-6]);
+        
+    
+    var dragControls = new THREE.DragControls( lights, camera, renderer.domElement );
+    dragControls.addEventListener( 'dragstart', function () {
+        controls.enabled = false;
+    } );
+    dragControls.addEventListener( 'dragend', function () {
+        controls.enabled = true;
+    } );
     
     var light = new THREE.DirectionalLight( 0xffffff , 1);
     light.position.set(10,10,30);
@@ -229,10 +262,6 @@ function draw(){
     scene.add( cubeCamera2 );*/
     //------------------------------
 
-    
-
-
-    
 
     // function for finding atom object according to their names.
     function findAtom(groups){
@@ -278,7 +307,11 @@ function draw(){
     function redrawBones(){
         for(var j=0;j<pairDistances.length;j++){
             for(var k=0;k<pairDistances[j].length;k++){
-                if(pairDistances[j][k] > boneGroups[activeBoneGroup].minDistance && pairDistances[j][k] <= boneGroups[activeBoneGroup].maxDistance){    //has to be a bone
+                var condition1 = (pairDistances[j][k] > boneGroups[activeBoneGroup].minDistance && pairDistances[j][k] <= boneGroups[activeBoneGroup].maxDistance); //Checks min and max distance
+                var index1 = atomNames.indexOf(groups[j].name);
+                var index2 = boneGroups[activeBoneGroup].atomNamesCopy[index1].indexOf(groups[k+j+1].name);
+                var condition2 = boneGroups[activeBoneGroup].allowedElements[index1][index2];   //checks if the bone drawing is allowed
+                if(condition1 && condition2){    //has to be a bone
                     if(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] == null){
                         boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] = createBone(groups[j].coordinates,groups[k+j+1].coordinates,boneGroups[activeBoneGroup].material,boneGroups[activeBoneGroup].thickness);    //the bone is drawn
                         scene.add(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k]);
@@ -375,7 +408,7 @@ function draw(){
             'Min distance': boneGroups[activeBoneGroup].minDistance,
             'Max distance' : boneGroups[activeBoneGroup].maxDistance,
             'Bone from' : atomNames[allowedx],
-            'Bone to' : atomNames.slice(allowedx)[allowedy],
+            'Bone to' : boneGroups[activeBoneGroup].atomNamesCopy[allowedx][allowedy],
             'Allowed' : boneGroups[activeBoneGroup].allowedElements[allowedx][allowedy],
             'Color' : boneGroups[activeBoneGroup].material.color.getHex(),
             'Thickness' : boneGroups[activeBoneGroup].thickness,
@@ -414,7 +447,16 @@ function draw(){
                 }
 
                 for(var i=0;i<atomNames.length;i++){
-                    boneGroups[activeBoneGroup].allowedElements.push(atomNames[i]);
+                    var row = [];
+                    for(j=i;j<atomNames.length;j++){
+                        row.push(true);
+                    }
+                    boneGroups[activeBoneGroup].allowedElements.push(row);
+                    var row2 = [];
+                    for(j=i;j<atomNames.length;j++){
+                        row2.push(atomNames[j]);
+                    }
+                    boneGroups[activeBoneGroup].atomNamesCopy.push(row2);
                 }
                 refreshBoneGui();
             },
@@ -469,13 +511,14 @@ function draw(){
             refreshBoneGui();
         });
 
-        guiBone.add( boneParameters, "Bone to", atomNames.slice(allowedx)).listen().onChange(function(value){
-            allowedy = atomNames.slice(allowedx).indexOf(value);
+        guiBone.add( boneParameters, "Bone to", boneGroups[activeBoneGroup].atomNamesCopy[allowedx]).listen().onChange(function(value){
+            allowedy = boneGroups[activeBoneGroup].atomNamesCopy[allowedx].indexOf(value);
             refreshBoneGui();
         });
 
         guiBone.add( boneParameters, "Allowed").listen().onChange(function(value){
-            boneGroups[activeBoneGroup].allowedElements[allowedx][allowedy] = value;            
+            boneGroups[activeBoneGroup].allowedElements[allowedx][allowedy] = value;
+            redrawBones();
             refreshBoneGui();
         });
 
