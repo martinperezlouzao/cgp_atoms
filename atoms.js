@@ -544,11 +544,128 @@ function draw(){
 
     function refreshSettingsGui(){
         settingsParameters = {
+            "Load settings": function(){
+                var settingsFile = prompt("Enter a name for the file which contains the settings", fileName + "_settings.txt");
+    
+                if(settingsFile == ""){
+                    window.alert("You have to enter a name");
+                    return;
+                }
+
+                file.load(
+                    // resource URL
+                    settingsFile,
+                    // onLoad callback
+                    function ( data ) {
+                        // output the text to the console
+                        var lines = data.split('#');
+
+                        var groupsOfAtoms = lines[0].split('$');
+                        var groupsOfBones = lines[1].split('$');
+
+                        for(var i=0;i<groupsOfAtoms.length;i++){    //restore atoms
+                            var groupData = groupsOfAtoms[i].split(';');
+                            activeSelection = atomNames.indexOf(groupData[0]);
+                            findAtom(groups).forEach(obj => {
+                                obj.material.color.setHex(groupData[1]);});
+                            findAtom(groups).forEach(obj => {
+                                obj.material.metalness = groupData[2];
+                            });
+                            findAtom(groups).forEach(obj => {
+                                obj.material.roughness = groupData[3];
+                            });
+                        }
+                        activeSelection = 0;
+
+                        for(var i=0;i<groupsOfBones.length;i++){    //restore bones
+
+                        }
+
+                        redrawBones();
+                    },				
+                    // onProgress callback
+                    function ( xhr ) {
+                    },
+                    // onError callback
+                    function ( err ) {
+                        window.alert("Could not load the file " + settingsFile + ", please refresh the browser and try again");
+                    }
+                );
+
+
+            },
             "Save settings": function(){
-                
+                var content = "";
+
+                for(var i=0;i<atomNames.length;i++){
+                    content += atomNames[i];
+                    content += ";0x";
+
+                    for(var j=0;j<groups.length;j++){
+                        if(groups[j].name == atomNames[i]){
+                            content += groups[i].material.color.getHexString();
+                            content += ";";
+                            content += groups[i].material.metalness;
+                            content += ";";
+                            content += groups[i].material.roughness;
+                            break;
+                        }
+                    }
+                    
+                    if(i != atomNames.length - 1){
+                        content += "$";
+                    }
+                }
+
+                content += "#";
+
+                for(var i=0;i<boneGroups.length;i++){
+                    content += boneGroups[i].name;
+                    content += ";";
+
+                    content += boneGroups[i].minDistance;
+                    content += ";";
+
+                    content += boneGroups[i].maxDistance;
+                    content += ";";
+
+                    for(var j=0;j<boneGroups[i].allowedElements.length;j++){
+                        for(var k=0;k<boneGroups[i].allowedElements[j].length;k++){
+                            content += boneGroups[i].allowedElements[j][k];
+                            if(k != boneGroups[i].allowedElements[j].length - 1){
+                                content += ",";
+                            }
+                        }
+
+                        if(j != boneGroups[i].allowedElements.length - 1){
+                            content += "-"
+                        }
+                    }
+
+                    content += ";0x";
+                    content += boneGroups[i].material.color.getHexString();
+                    content += ";";
+                    content += boneGroups[i].material.metalness;
+                    content += ";";
+                    content += boneGroups[i].material.roughness;
+
+
+                    if(i != boneGroups.length - 1){
+                        content += "$";
+                    }
+                }
+
+                var filename = fileName + "_settings.txt";
+
+                var blob = new Blob([content], {
+                type: "text/plain;charset=utf-8"
+                });
+
+                saveAs(blob, filename);
             }
         }
 
+        guiSettings.add(settingsParameters, "Load settings");
         guiSettings.add(settingsParameters, "Save settings");
     }
 
