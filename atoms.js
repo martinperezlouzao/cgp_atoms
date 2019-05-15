@@ -9,31 +9,39 @@ var pairDistances = [];
 var atomParameters;
 var boneParameters;
 var settingsParameters;
+var legendParameters;
 
 var activeSelection;
 var activeBoneGroup = -1;
 var allowedx = 0, allowedy = 0;
 
 var maxDistance = 0;
+
+var bgColor = 0x000000;
+
 //--------------------------
 
 var fileName;
 
 
-var atomType = function(name, coordinates, geometry, material){
+var atomType = function(name, coordinates, geometry, material, size, segments){
         this.name = name;
         this.coordinates = coordinates;
         this.geometry = geometry;
         this.material = material;
+        this.size = size;
+        this.segments = segments;
+        this.mesh = null;
     return this;
 };
 
-var boneGroup = function(name, minDistance, maxDistance, material, thickness){
+var boneGroup = function(name, minDistance, maxDistance, material, thickness, segments){
         this.name = name;
         this.minDistance = minDistance;
         this.maxDistance = maxDistance;
         this.material = material;
         this.thickness = thickness;
+        this.segments = segments;
         this.bonesAlreadyDrawn = [];
         this.atomNamesCopy = [];
         this.allowedElements = [];
@@ -155,7 +163,10 @@ function fillArrays(){
                                     new THREE.MeshStandardMaterial( {color: randomColor,
                                                 metalness: 0.5,
                                                 roughness: 0,
-                                                /*envMap: cubeCamera2.renderTarget.texture*/} )
+                                                transparent: true
+                                                /*envMap: cubeCamera2.renderTarget.texture*/} ),
+                                    0.6,
+                                    32
                                         );
 
         if(newAtom.name != atomNames[j]){
@@ -195,8 +206,10 @@ function fillArrays(){
                     0,
                     new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
                         metalness: 0.5,
-                        roughness: 0} ),
-                    0.1));
+                        roughness: 0,
+                        transparent: true} ),
+                    0.1,
+                    32));
 
     boneGroupNames.push("Group 1");
     activeBoneGroup = 0;
@@ -291,6 +304,7 @@ function draw(){
     for(var i=0;i<groups.length;i++){
         var mesh = new THREE.Mesh(groups[i].geometry, groups[i].material);
             mesh.position.set(groups[i].coordinates.x, groups[i].coordinates.y, groups[i].coordinates.z);
+            groups[i].mesh = mesh;
             //mesh.
             scene.add(mesh);
     }
@@ -298,11 +312,11 @@ function draw(){
 
     //---------------------CREATION OF BONES---------------------------
 
-    function createBone(v1, v2, material, thickness){
+    function createBone(v1, v2, material, thickness, segments){
         var length = v1.distanceTo(v2);
         var position  = v2.clone().add(v1).divideScalar(2);
 
-        var bone = new THREE.CylinderBufferGeometry(thickness,thickness,length,10,10,false);
+        var bone = new THREE.CylinderBufferGeometry(thickness,thickness,length,segments,segments,false);
     
         var orientation = new THREE.Matrix4();
         var rotation = new THREE.Matrix4();
@@ -350,11 +364,132 @@ function draw(){
                 if(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] != null){
                     scene.remove(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k]);
                     boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k].geometry.dispose();
-                    boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] = createBone(groups[j].coordinates,groups[k+j+1].coordinates,boneGroups[activeBoneGroup].material,boneGroups[activeBoneGroup].thickness);    //the bone is drawn
+                    boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k] = createBone(groups[j].coordinates,groups[k+j+1].coordinates,boneGroups[activeBoneGroup].material,boneGroups[activeBoneGroup].thickness,boneGroups[activeBoneGroup].segments);    //the bone is drawn
                     scene.add(boneGroups[activeBoneGroup].bonesAlreadyDrawn[j][k]);
                 }
             }
         }
+    }
+
+    function redrawAtoms(){
+        for(var i=0;i<groups.length;i++){
+            var a = groups[i];
+            scene.remove(a.mesh);
+            a.geometry.dispose();
+            a.geometry = new THREE.SphereBufferGeometry( a.size, a.segments, a.segments );
+            a.mesh.geometry = a.geometry;
+            scene.add(a.mesh);
+        }
+    }
+
+    function tryLoadSettings(){
+        file.load(
+            // resource URL
+            fileName + ".settings",
+            // onLoad callback
+            function ( data ) {
+                // output the text to the console
+                var lines = data.split('#');
+
+
+                if(lines[3] != fileName){
+                    return;
+                }
+
+                var groupsOfAtoms = lines[0].split('$');
+                var groupsOfBones = lines[1].split('$');
+                bgColor = parseInt(lines[2]);
+                renderer.setClearColor(bgColor);
+
+                for(var i=0;i<groupsOfAtoms.length;i++){    //restore atoms
+                    var groupData = groupsOfAtoms[i].split(';');
+                    activeSelection = atomNames[atomNames.indexOf(groupData[0])];
+                    findAtom().forEach(obj => {
+                        obj.material.color.setHex(parseInt(groupData[1]));
+                    });
+                    findAtom().forEach(obj => {
+                        obj.material.metalness = parseFloat(groupData[2]);
+                    });
+                    findAtom().forEach(obj => {
+                        obj.material.roughness = parseFloat(groupData[3]);
+                    });
+                    findAtom().forEach(obj => {
+                        obj.material.roughness = parseFloat(groupData[3]);
+                    });
+                    findAtom().forEach(obj => {
+                        obj.material.opacity = parseFloat(groupData[4]);
+                    });
+                    findAtom().forEach(obj => {
+                        obj.size = parseFloat(groupData[5]);
+                    });
+                    findAtom().forEach(obj => {
+                        obj.segments = parseInt(groupData[6]);
+                    });
+                }
+                activeSelection = atomNames[0];
+
+                redrawAtoms();
+
+
+                clearAllCylinders();
+                for(var i=0;i<groupsOfBones.length;i++){    //restore bones
+                    var groupData = groupsOfBones[i].split(';');
+
+                    boneGroups.push(new boneGroup(groupData[0],
+                        parseFloat(groupData[1]),
+                        parseFloat(groupData[2]),
+                        new THREE.MeshStandardMaterial( {color: parseInt(groupData[4]),
+                            metalness: parseFloat(groupData[6]),
+                            roughness: parseFloat(groupData[7]),
+                            transparent: true} ),
+                        parseFloat(groupData[5]),
+                        parseInt(groupData[9])));
+                    
+                    boneGroups[i].material.opacity = parseFloat(groupData[8]);
+
+                    boneGroupNames.push(groupData[0]);
+                    activeBoneGroup = boneGroups.length-1;
+                    for(var j=0;j<pairDistances.length;j++){
+                        var row = [];
+                        for(var k=0;k<pairDistances[j].length;k++){
+                            row.push(null);
+                        }
+                        boneGroups[activeBoneGroup].bonesAlreadyDrawn.push(row);
+                    }
+
+                    for(var j=0;j<atomNames.length;j++){
+                        var row = [];
+                        for(k=j;k<atomNames.length;k++){
+                            row.push(true);
+                        }
+                        boneGroups[activeBoneGroup].allowedElements.push(row);
+                        var row2 = [];
+                        for(k=j;k<atomNames.length;k++){
+                            row2.push(atomNames[k]);
+                        }
+                        boneGroups[activeBoneGroup].atomNamesCopy.push(row2);
+                    }
+
+
+                    var allowedMatrix = groupData[3].split('-');
+                    for(var j=0;j<allowedMatrix.length;j++){
+                        var row = allowedMatrix[j].split(',');
+                        for(var k=0;k<row.length;k++){
+                            if (row[k] == "true") boneGroups[activeBoneGroup].allowedElements[j][k] = true;
+                            else boneGroups[activeBoneGroup].allowedElements[j][k] = false;
+                        }
+                    }
+
+                    redrawBones();
+                    redrawCylinders();
+                }
+
+                activeBoneGroup = 0;
+                refreshAtomGui();
+                refreshBoneGui();
+                refreshLegendGui();
+            }
+        );
     }
 
     
@@ -371,6 +506,9 @@ function draw(){
             'Color': findAtom()[0].material.color.getHex(),
             'Roughness': findAtom()[0].material.roughness,
             'Metalness': findAtom()[0].material.metalness,
+            'Opacity': findAtom()[0].material.opacity,
+            'Size' : findAtom()[0].size,
+            'Segments' : findAtom()[0].segments
         };
         guiAtom.add( atomParameters, "Element", atomNames).onChange( function ( value ) {
             activeSelection = atomNames[atomNames.indexOf(value)];
@@ -381,6 +519,7 @@ function draw(){
             findAtom().forEach(obj => {
                 obj.material.color.setHex(value);
             })
+            refreshLegendGui();
         } ).listen();
         
         guiAtom.add( atomParameters, "Metalness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
@@ -393,6 +532,23 @@ function draw(){
                 obj.material.roughness = value;
             })
         } );
+        guiAtom.add( atomParameters, "Opacity" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+            findAtom().forEach(obj => {
+                obj.material.opacity = value;
+            })
+        } );
+        guiAtom.add( atomParameters, "Size" ).step(0.01).min(0.1).max(1).onChange( function ( value ) {
+            findAtom().forEach(obj => {
+                obj.size = value;
+                redrawAtoms();
+            })
+        } ).listen();
+        guiAtom.add( atomParameters, "Segments" ).step(1).min(3).max(32).onChange( function ( value ) {
+            findAtom().forEach(obj => {
+                obj.segments = value;
+                redrawAtoms();
+            })
+        } ).listen();
     }
 
 
@@ -427,6 +583,8 @@ function draw(){
             'Thickness' : boneGroups[activeBoneGroup].thickness,
             'Roughness': boneGroups[activeBoneGroup].material.roughness,
             'Metalness': boneGroups[activeBoneGroup].material.metalness,
+            'Opacity': boneGroups[activeBoneGroup].material.opacity,
+            'Segments': boneGroups[activeBoneGroup].segments,
             'Create group': function(){
                 var name = prompt("Enter a name for the bone group", "");
     
@@ -446,8 +604,10 @@ function draw(){
                                 0,
                                 new THREE.MeshStandardMaterial( {color: Math.random() * 0xffffff,
                                     metalness: 0.5,
-                                    roughness: 0} ),
-                                0.1));
+                                    roughness: 0,
+                                    transparent: true} ),
+                                0.1,
+                                32));
     
                 boneGroupNames.push(name);
                 activeBoneGroup = boneGroups.length-1;
@@ -537,6 +697,7 @@ function draw(){
 
         guiBone.addColor( boneParameters, 'Color' ).onChange( function ( value ) {
             boneGroups[activeBoneGroup].material.color.setHex(value);
+            refreshLegendGui();
         } ).listen();
 
         guiBone.add(boneParameters, 'Thickness').step(0.01).min(0.1).max(0.7).onChange( function(value){
@@ -550,6 +711,13 @@ function draw(){
         guiBone.add( boneParameters, "Roughness" ).min( 0 ).max( 1 ).onChange( function ( value ) {
             boneGroups[activeBoneGroup].material.roughness = value;
         } );
+        guiBone.add( boneParameters, "Opacity" ).min( 0 ).max( 1 ).onChange( function ( value ) {
+            boneGroups[activeBoneGroup].material.opacity = value;
+        } );
+        guiBone.add( boneParameters, "Segments" ).min( 3 ).max( 32 ).step(1).onChange( function ( value ) {
+            boneGroups[activeBoneGroup].segments = value;
+            redrawCylinders();
+        } );
 
         guiBone.add ( boneParameters, "Create group");  
         guiBone.add ( boneParameters, "Delete group");  
@@ -558,7 +726,7 @@ function draw(){
     function refreshSettingsGui(){
         settingsParameters = {
             "Load settings": function(){
-                var settingsFile = prompt("Enter a name for the file which contains the settings", fileName + "_settings.txt");
+                var settingsFile = prompt("Enter a name for the file which contains the settings", fileName + ".settings");
     
                 if(settingsFile == ""){
                     window.alert("You have to enter a name");
@@ -573,8 +741,15 @@ function draw(){
                         // output the text to the console
                         var lines = data.split('#');
 
+                        if(lines[3] != fileName){
+                            window.alert("This settings file does not correspond to " + fileName + ", please select another");
+                            return;
+                        }
+
                         var groupsOfAtoms = lines[0].split('$');
                         var groupsOfBones = lines[1].split('$');
+                        bgColor = parseInt(lines[2]);
+                        renderer.setClearColor(bgColor);
 
                         for(var i=0;i<groupsOfAtoms.length;i++){    //restore atoms
                             var groupData = groupsOfAtoms[i].split(';');
@@ -588,22 +763,39 @@ function draw(){
                             findAtom().forEach(obj => {
                                 obj.material.roughness = parseFloat(groupData[3]);
                             });
+                            findAtom().forEach(obj => {
+                                obj.material.roughness = parseFloat(groupData[3]);
+                            });
+                            findAtom().forEach(obj => {
+                                obj.material.opacity = parseFloat(groupData[4]);
+                            });
+                            findAtom().forEach(obj => {
+                                obj.size = parseFloat(groupData[5]);
+                            });
+                            findAtom().forEach(obj => {
+                                obj.segments = parseInt(groupData[6]);
+                            });
                         }
                         activeSelection = atomNames[0];
+
+                        redrawAtoms();
 
 
                         clearAllCylinders();
                         for(var i=0;i<groupsOfBones.length;i++){    //restore bones
                             var groupData = groupsOfBones[i].split(';');
-                            //cambiar de cada vez la activeboneselection y redibujar bones/cylinders
 
                             boneGroups.push(new boneGroup(groupData[0],
                                 parseFloat(groupData[1]),
                                 parseFloat(groupData[2]),
                                 new THREE.MeshStandardMaterial( {color: parseInt(groupData[4]),
                                     metalness: parseFloat(groupData[6]),
-                                    roughness: parseFloat(groupData[7])} ),
-                                parseFloat(groupData[5])));
+                                    roughness: parseFloat(groupData[7]),
+                                    transparent: true} ),
+                                parseFloat(groupData[5]),
+                                parseInt(groupData[9])));
+                            
+                            boneGroups[i].material.opacity = parseFloat(groupData[8]);
     
                             boneGroupNames.push(groupData[0]);
                             activeBoneGroup = boneGroups.length-1;
@@ -628,7 +820,6 @@ function draw(){
                                 boneGroups[activeBoneGroup].atomNamesCopy.push(row2);
                             }
 
-                            //COPY ALLOWED MATRIX AND DONE
 
                             var allowedMatrix = groupData[3].split('-');
                             for(var j=0;j<allowedMatrix.length;j++){
@@ -646,6 +837,7 @@ function draw(){
                         activeBoneGroup = 0;
                         refreshAtomGui();
                         refreshBoneGui();
+                        refreshLegendGui();
                     },				
                     // onProgress callback
                     function ( xhr ) {
@@ -674,6 +866,12 @@ function draw(){
                     content += currentGroup[0].material.metalness;
                     content += ";";
                     content += currentGroup[0].material.roughness;
+                    content += ";";
+                    content += currentGroup[0].material.opacity;
+                    content += ";";
+                    content += currentGroup[0].size;
+                    content += ";";
+                    content += currentGroup[0].segments;
                     
                     if(i != atomNames.length - 1){
                         content += "$";
@@ -715,6 +913,10 @@ function draw(){
                     content += boneGroups[i].material.metalness;
                     content += ";";
                     content += boneGroups[i].material.roughness;
+                    content += ";";
+                    content += boneGroups[i].material.opacity;
+                    content += ";";
+                    content += boneGroups[i].segments;
 
 
                     if(i != boneGroups.length - 1){
@@ -722,31 +924,109 @@ function draw(){
                     }
                 }
 
-                var filename = fileName + "_settings.txt";
+                content += "#";
+
+                content += bgColor;
+
+                content += "#";
+
+                content += fileName;
+
+                var filename = fileName + ".settings";
 
                 var blob = new Blob([content], {
                 type: "text/plain;charset=utf-8"
                 });
 
+                window.alert("If you want the settings file to be loaded automatically the next time you open the " + fileName + " file, save it alongside " + fileName + " with the name " + filename + ", overwriting the existing one");
+
                 saveAs(blob, filename);
-            }
+            },
+            "Background color": bgColor
         }
 
         guiSettings.add(settingsParameters, "Load settings");
         guiSettings.add(settingsParameters, "Save settings");
+        guiSettings.addColor( settingsParameters, "Background color" ).onChange( function ( value ) {
+            bgColor = value;
+            renderer.setClearColor( bgColor );  
+        } );
+    }
+
+    function refreshLegendGui(){
+        while(guiLegend.__controllers.length > 0){
+            guiLegend.__controllers[0].remove();
+        }
+
+        var parameters = "{";
+
+        var tempActiveselection = activeSelection;
+
+        for(var i=0;i<atomNames.length;i++){
+            activeSelection = atomNames[i];
+            parameters += "\"";
+            parameters += atomNames[i];
+            parameters += "\":";
+            parameters += findAtom()[0].material.color.getHex();
+            if(i != atomNames.length-1){
+                parameters += ',';
+            }
+        }
+
+        parameters += "}";
+
+        legendParameters = JSON.parse(parameters);
+        
+        for(var i=0;i<atomNames.length;i++){
+            guiLegend.addColor(legendParameters, atomNames[i]);
+        }
+
+        activeSelection = tempActiveselection;
+
+
+
+        parameters = "{";
+
+        tempActiveselection = activeBoneGroup;
+
+        for(var i=0;i<boneGroupNames.length;i++){
+            activeBoneGroup = i;
+            parameters += "\"";
+            parameters += boneGroupNames[i];
+            parameters += "\":";
+            parameters += boneGroups[activeBoneGroup].material.color.getHex();
+            if(i != boneGroupNames.length-1){
+                parameters += ',';
+            }
+        }
+
+        parameters += "}";
+
+        legendParameters = JSON.parse(parameters);
+        
+        for(var i=0;i<boneGroupNames.length;i++){
+            guiLegend.addColor(legendParameters, boneGroupNames[i]);
+        }
+
+        activeBoneGroup = tempActiveselection;
     }
 
     var gui = new dat.GUI();
     var guiAtom = gui.addFolder('Atom properties');
     var guiBone = gui.addFolder('Bone properties');
     var guiSettings = gui.addFolder('Manage settings');
+    var guiLegend = gui.addFolder('Legend');
     refreshAtomGui();
     refreshBoneGui();    
     refreshSettingsGui();
+    refreshLegendGui();
     gui.open();
         
-    renderer.setClearColor( 0x000000, 1);
+    renderer.setClearColor( bgColor, 1);
     renderer.render( scene, camera );
+
+    tryLoadSettings();
+    
     animate();
 }
 function animate(){
