@@ -420,6 +420,16 @@ function draw(){
                         obj.material.opacity = parseFloat(groupData[4]);
                     });
                     findAtom().forEach(obj => {
+                        if(groupData[7] == "true"){
+                            obj.material.wireframe = true;
+                        }
+
+                        else{
+                            obj.material.wireframe = false;
+                        }
+                        
+                    });
+                    findAtom().forEach(obj => {
                         obj.size = parseFloat(groupData[5]);
                     });
                     findAtom().forEach(obj => {
@@ -446,6 +456,14 @@ function draw(){
                         parseInt(groupData[9])));
                     
                     boneGroups[i].material.opacity = parseFloat(groupData[8]);
+
+                    if(groupData[10] == "true"){
+                        boneGroups[i].material.wireframe = true;
+                    }
+
+                    else{
+                        boneGroups[i].material.wireframe = false;
+                    }
 
                     boneGroupNames.push(groupData[0]);
                     activeBoneGroup = boneGroups.length-1;
@@ -508,7 +526,8 @@ function draw(){
             'Metalness': findAtom()[0].material.metalness,
             'Opacity': findAtom()[0].material.opacity,
             'Size' : findAtom()[0].size,
-            'Segments' : findAtom()[0].segments
+            'Segments' : findAtom()[0].segments,
+            'Wireframe': findAtom()[0].material.wireframe
         };
         guiAtom.add( atomParameters, "Element", atomNames).onChange( function ( value ) {
             activeSelection = atomNames[atomNames.indexOf(value)];
@@ -549,6 +568,11 @@ function draw(){
                 redrawAtoms();
             })
         } ).listen();
+        guiAtom.add( atomParameters, "Wireframe" ).onChange( function ( value ) {
+            findAtom().forEach(obj => {
+                obj.material.wireframe = value;
+            })
+        } );
     }
 
 
@@ -585,6 +609,7 @@ function draw(){
             'Metalness': boneGroups[activeBoneGroup].material.metalness,
             'Opacity': boneGroups[activeBoneGroup].material.opacity,
             'Segments': boneGroups[activeBoneGroup].segments,
+            'Wireframe': boneGroups[activeBoneGroup].material.wireframe,
             'Create group': function(){
                 var name = prompt("Enter a name for the bone group", "");
     
@@ -719,6 +744,10 @@ function draw(){
             redrawCylinders();
         } );
 
+        guiBone.add( boneParameters, "Wireframe" ).onChange( function ( value ) {
+            boneGroups[activeBoneGroup].material.wireframe = value;
+        } );
+
         guiBone.add ( boneParameters, "Create group");  
         guiBone.add ( boneParameters, "Delete group");  
     }  
@@ -770,6 +799,16 @@ function draw(){
                                 obj.material.opacity = parseFloat(groupData[4]);
                             });
                             findAtom().forEach(obj => {
+                                if(groupData[7] == "true"){
+                                    obj.material.wireframe = true;
+                                }
+
+                                else{
+                                    obj.material.wireframe = false;
+                                }
+                                
+                            });
+                            findAtom().forEach(obj => {
                                 obj.size = parseFloat(groupData[5]);
                             });
                             findAtom().forEach(obj => {
@@ -796,6 +835,14 @@ function draw(){
                                 parseInt(groupData[9])));
                             
                             boneGroups[i].material.opacity = parseFloat(groupData[8]);
+
+                            if(groupData[10] == "true"){
+                                boneGroups[i].material.wireframe = true;
+                            }
+
+                            else{
+                                boneGroups[i].material.wireframe = false;
+                            }
     
                             boneGroupNames.push(groupData[0]);
                             activeBoneGroup = boneGroups.length-1;
@@ -872,6 +919,8 @@ function draw(){
                     content += currentGroup[0].size;
                     content += ";";
                     content += currentGroup[0].segments;
+                    content += ";";
+                    content += currentGroup[0].material.wireframe;
                     
                     if(i != atomNames.length - 1){
                         content += "$";
@@ -917,6 +966,8 @@ function draw(){
                     content += boneGroups[i].material.opacity;
                     content += ";";
                     content += boneGroups[i].segments;
+                    content += ";";
+                    content += boneGroups[i].material.wireframe;
 
 
                     if(i != boneGroups.length - 1){
